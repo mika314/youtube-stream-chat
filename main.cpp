@@ -1,6 +1,8 @@
 #include "cpptoml/cpptoml.h"
+#include "log/log.hpp"
 #include "sdlpp/sdlpp.hpp"
 #include <codecvt>
+#include <csignal>
 #include <curl/curl.h>
 #include <iostream>
 #include <json/json.h>
@@ -76,6 +78,7 @@ static auto getChatId(const std::string &apiKey, const std::string &accessToken)
   }();
 
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
   struct curl_slist *list = NULL;
 
@@ -95,6 +98,15 @@ static auto getChatId(const std::string &apiKey, const std::string &accessToken)
   auto res = curl_easy_perform(curl);
   if (res != CURLE_OK)
     fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+
+  long codep;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &codep);
+  if (codep != 200)
+  {
+    curl_easy_cleanup(curl);
+    LOG(codep, ":", out);
+    throw std::runtime_error("query token error");
+  }
 
   curl_slist_free_all(list);
 
@@ -120,6 +132,8 @@ struct Msgs
   std::vector<Msg> msgs;
 };
 
+enum class NeedReauth {};
+
 static auto chat(const std::string &apiKey, const std::string &accessToken, const std::string &chatId, const std::string &pageToken = "") -> Msgs
 {
   auto curl = curl_easy_init();
@@ -134,6 +148,7 @@ static auto chat(const std::string &apiKey, const std::string &accessToken, cons
   }();
 
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
   struct curl_slist *list = NULL;
 
@@ -153,6 +168,16 @@ static auto chat(const std::string &apiKey, const std::string &accessToken, cons
   auto res = curl_easy_perform(curl);
   if (res != CURLE_OK)
     fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+  long codep;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &codep);
+  if (codep == 401)
+    throw NeedReauth{};
+  if (codep != 200)
+  {
+    curl_easy_cleanup(curl);
+    LOG(codep, ":", out);
+    throw std::runtime_error("query chat message error");
+  }
 
   curl_slist_free_all(list);
 
@@ -211,7 +236,7 @@ static std::string getTtsToken(const std::string &azureKey)
   if (codep != 200)
   {
     curl_easy_cleanup(curl);
-    std::cerr << codep << ":" << ret << std::endl;
+    LOG(codep, ":", ret);
     throw std::runtime_error("query token error");
   }
 
@@ -322,24 +347,32 @@ static std::unordered_map<std::string, std::string> loadVoices()
   std::unordered_map<std::string, std::string> ret;
   std::ifstream f("voices.txt");
   if (!f)
-    std::cerr << "File voices.txt is missing\n";
+    LOG("File voices.txt is missing");
   std::string line;
   while (std::getline(f, line))
   {
     std::istringstream strm(line);
     std::string name;
+    std::getline(strm, name, '=');
     std::string voice;
-    strm >> name >> voice;
+    std::getline(strm, voice);
     ret[name] = voice;
   }
   return ret;
+}
+
+static volatile bool needVoicesReload = true;
+
+void sigHup(int /*signal*/)
+{
+  needVoicesReload = true;
 }
 
 static std::string getVoice(const std::string &name, const std::string &text)
 {
   if (!isRu(text))
   {
-    static std::unordered_map<std::string, std::string> voicesMap = loadVoices();
+    static std::unordered_map<std::string, std::string> voicesMap;
     static std::array<std::string, 15> voices = {
       "en-CA-Linda",
       "en-AU-HayleyRUS",
@@ -357,6 +390,12 @@ static std::string getVoice(const std::string &name, const std::string &text)
       "en-US-BenjaminRUS",
       "en-US-Guy24kRUS",
     };
+
+    if (needVoicesReload)
+    {
+      voicesMap = loadVoices();
+      needVoicesReload = false;
+    }
 
     //  en-AU-NatashaNeural
     //  en-CA-ClaraNeural
@@ -539,8 +578,6 @@ static size_t readTextToPcmCb(char *buffer, size_t size, size_t nitems, void *ct
   return ret;
 }
 
-enum class NeedReauth {};
-
 static std::vector<int16_t> textToPcm(const std::string &token, const std::string &name, const std::string &text, bool isMe)
 {
   std::string pcmStr;
@@ -564,7 +601,6 @@ static std::vector<int16_t> textToPcm(const std::string &token, const std::strin
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
   const auto voice = getVoice(name, text);
-  std::cout << "voice: " << voice << std::endl;
 
   static std::string lastName;
   auto supressName = (lastName == name) && !isMe;
@@ -588,8 +624,8 @@ static std::vector<int16_t> textToPcm(const std::string &token, const std::strin
     throw NeedReauth{};
   if (codep != 200)
   {
-    std::cerr << "http code: " << codep << std::endl;
-    std::cerr << "content: " << pcmStr << std::endl;
+    LOG("http code:", codep);
+    LOG("content:", pcmStr);
     curl_easy_cleanup(curl);
     throw std::runtime_error("tts error");
   }
@@ -603,14 +639,11 @@ static std::vector<int16_t> textToPcm(const std::string &token, const std::strin
   for (auto i = 0u; i < 2 * PauseSz; ++i)
     ret[i] = 0;
   memcpy(ret.data() + 2 * PauseSz, pcmStr.data(), pcmStr.size());
-  std::cout << "pcm: " << ret.size() << std::endl;
   return ret;
 }
 
 auto Ctx::tts(const std::string &name, const std::string &text, bool isMe) -> void
 {
-  std::cout << name << ": " << text << std::endl;
-
   for (int i = 0; i < 2; ++i)
   {
     bool needAuth = false;
@@ -647,19 +680,21 @@ auto Ctx::tts(const std::string &name, const std::string &text, bool isMe) -> vo
     }
     catch (std::exception &e)
     {
-      std::cerr << e.what() << std::endl;
+      LOG(e.what());
     }
     if (!needAuth)
       return;
     ttsToken = getTtsToken(azureKey);
   }
-  std::cerr << "giving up to TTS\n";
+  LOG("giving up to TTS");
 }
 
 int main()
 {
   curl_global_init(CURL_GLOBAL_ALL);
-  sdl::Init sdl(SDL_INIT_EVERYTHING);
+  sdl::Init sdl(SDL_INIT_AUDIO);
+
+  std::signal(SIGHUP, sigHup);
 
   const auto toml = cpptoml::parse_file("credentials.toml");
   const auto refreshToken = toml->get_as<std::string>("refresh-token").value_or("");
@@ -667,7 +702,7 @@ int main()
   const auto clientSecret = toml->get_as<std::string>("client-secret").value_or("");
   const auto apiKey = toml->get_as<std::string>("api-key").value_or("");
   const auto azureKey = toml->get_as<std::string>("azure-key").value_or("");
-  const auto accessToken = getAccessToken(clientId, clientSecret, refreshToken);
+  auto accessToken = getAccessToken(clientId, clientSecret, refreshToken);
   const auto chatId = getChatId(apiKey, accessToken);
 
   Ctx ctx(azureKey);
@@ -677,16 +712,23 @@ int main()
   bool first = true;
   for (;;)
   {
-    auto msgs = chat(apiKey, accessToken, chatId, token);
-    token = msgs.nextPageToken;
-    for (const auto &msg : msgs.msgs)
+    try
     {
-      if (ids.find(msg.id) != std::end(ids))
-        continue;
-      std::cout << msg.name << ": " << msg.msg << std::endl;
-      if (!first)
-        ctx.tts(msg.name, msg.msg, false);
-      ids.insert(msg.id);
+      auto msgs = chat(apiKey, accessToken, chatId, token);
+      token = msgs.nextPageToken;
+      for (const auto &msg : msgs.msgs)
+      {
+        if (ids.find(msg.id) != std::end(ids))
+          continue;
+        std::cout << msg.name << ": " << msg.msg << std::endl;
+        if (!first)
+          ctx.tts(msg.name, msg.msg, false);
+        ids.insert(msg.id);
+      }
+    }
+    catch (NeedReauth)
+    {
+      accessToken = getAccessToken(clientId, clientSecret, refreshToken);
     }
     sleep(6);
     first = false;

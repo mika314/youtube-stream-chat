@@ -1,28 +1,29 @@
-advolkit en-US-GuyNeural
-evachampion en-GB-Susan-Apollo
-fluffyfuffer en-GB-HazelRUS
-geo3d en-GB-LibbyNeural
-jlabelle71 ko-KR-SunHiNeural
-karadeku en-GB-George-Apollo
-Mika en-GB-MiaNeural
-moobot en-CA-ClaraNeural
-nagisashiota231 en-AU-NatashaNeural
-nightbot *
-projectaroid en-GB-LibbyNeural
-ramenkid_ttw en-US-AriaNeural
-sajanbest_9 en-US-Guy24kRUS
-slaterusa en-US-GuyNeural
-streamlabs *
-svetliaka92 en-US-GuyNeural
-tanja_ultramono *
-tearsoftokyo ja-JP-NanamiNeural
-twocatsyelling en-CA-ClaraNeural
-cmaennche en-CA-ClaraNeural
-general_kenobi_jedi en-CA-ClaraNeural
-theemperorpalpatine314 en-GB-MiaNeural
-muzzy_30 en-IN-Ravi-Apollo
-streamelements *
-alex_corruptor en-AU-Catherine
-muzzy_30 *
-enjoytolive en-IN-NeerjaNeural
-officer_saitou_san_bot *
+advolkit=en-US-GuyNeural
+evachampion=en-GB-Susan-Apollo
+fluffyfuffer=en-GB-HazelRUS
+geo3d=en-GB-LibbyNeural
+jlabelle71=ko-KR-SunHiNeural
+karadeku=en-GB-George-Apollo
+Mika=en-GB-MiaNeural
+Mika Streams=en-GB-MiaNeural
+moobot=en-CA-ClaraNeural
+nagisashiota231=en-AU-NatashaNeural
+nightbot=*
+projectaroid=en-GB-LibbyNeural
+ramenkid_ttw=en-US-AriaNeural
+sajanbest_9=en-US-Guy24kRUS
+slaterusa=en-US-GuyNeural
+streamlabs=*
+svetliaka92=en-US-GuyNeural
+tanja_ultramono=*
+tearsoftokyo=ja-JP-NanamiNeural
+twocatsyelling=en-CA-ClaraNeural
+cmaennche=en-CA-ClaraNeural
+general_kenobi_jedi=en-CA-ClaraNeural
+theemperorpalpatine314=en-GB-MiaNeural
+muzzy_30=en-IN-Ravi-Apollo
+streamelements=*
+alex_corruptor=en-AU-Catherine
+muzzy_30=*
+enjoytolive=en-IN-NeerjaNeural
+officer_saitou_san_bot=*
